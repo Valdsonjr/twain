@@ -72,7 +72,6 @@ test-suite twain-test
     TwainSpec
   build-depends:
     hspec
-    , hspec-discover
     , hspec-wai
     , twain
   ghc-options:

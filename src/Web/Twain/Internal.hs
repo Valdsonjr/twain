@@ -1,30 +1,26 @@
 module Web.Twain.Internal where
 
-import Control.Exception (Exception, handle, throwIO)
-import Control.Monad (join)
-import Control.Monad.Catch (throwM, try)
+import Control.Exception (handle, throwIO)
+import Control.Monad.Catch (throwM)
 import Control.Monad.IO.Class (liftIO)
 import qualified Data.Aeson as JSON
 import qualified Data.ByteString as B
 import Data.ByteString.Builder (toLazyByteString)
+import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy as BL
-import Data.Int
 import Data.List as L
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import Data.Text.Encoding
 import qualified Data.Vault.Lazy as V
-import Data.Word (Word64)
-import Network.HTTP.Types (Method, hCookie, mkStatus, status204, status400, status413, status500)
-import Network.HTTP2.Frame (ErrorCodeId (..))
-import Network.Wai (Application, Middleware, Request (..), lazyRequestBody, queryString, requestHeaders, requestMethod, responseLBS)
-import Network.Wai.Parse (File, ParseRequestBodyOptions, lbsBackEnd, noLimitParseRequestBodyOptions, parseRequestBodyEx)
-import Network.Wai.Request (RequestSizeException (..), requestSizeCheck)
+import Network.HTTP.Types (Method, hCookie, mkStatus, status400, status413)
+import Network.HTTP2.Client (ErrorCode (..))
+import Network.Wai (Request (..), lazyRequestBody, queryString, requestHeaders, requestMethod)
+import Network.Wai.Parse (lbsBackEnd, noLimitParseRequestBodyOptions, parseRequestBodyEx)
+import Network.Wai.Request (RequestSizeException (..))
 import System.IO.Unsafe (unsafePerformIO)
 import Web.Cookie (SetCookie, parseCookiesText, renderSetCookie)
 import Web.Twain.Types
-import Network.HTTP2.Client (HTTP2Error (..), ErrorCode(..))
-import qualified Data.ByteString.Char8 as BC
 
 parsedReqKey :: V.Key ParsedRequest
 parsedReqKey = unsafePerformIO V.newKey
@@ -60,15 +56,14 @@ concatParams preq =
 
 parseRequest :: Request -> ParsedRequest
 parseRequest req =
-  case V.lookup parsedReqKey (vault req) of
-    Just preq -> preq
-    Nothing ->
-      ParsedRequest
-        { preqPathParams = [],
-          preqQueryParams = decodeQueryParam <$> queryString req,
-          preqCookieParams = parseCookieParams req,
-          preqBody = Nothing
-        }
+  fromMaybe
+    ParsedRequest
+      { preqPathParams = [],
+        preqQueryParams = decodeQueryParam <$> queryString req,
+        preqCookieParams = parseCookieParams req,
+        preqBody = Nothing
+      }
+    (V.lookup parsedReqKey (vault req))
 
 match :: Maybe Method -> PathPattern -> Request -> Maybe [Param]
 match method (MatchPath f) req
@@ -111,10 +106,10 @@ wrapErr :: IO a -> IO a
 wrapErr = handle wrapMaxReqErr . handle wrapParseErr
 
 wrapMaxReqErr :: RequestSizeException -> IO a
-wrapMaxReqErr (RequestSizeException max) =
-  throwIO $ HttpError status413 $
-    "Request body size larger than " <> show max <> " bytes."
-
+wrapMaxReqErr (RequestSizeException maxBodySize) =
+  throwIO $
+    HttpError status413 $
+      "Request body size larger than " <> show maxBodySize <> " bytes."
 
 wrapParseErr :: HTTP2Exception -> IO a
 wrapParseErr (HTTP2Exception (ErrorCode code)) = do
@@ -124,11 +119,10 @@ wrapParseErr (HTTP2Exception (ErrorCode code)) = do
       errorMsg = T.unpack $ decodeUtf8 statusMsg
   throwIO $ HttpError status errorMsg
 
-
 parseCookieParams :: Request -> [Param]
 parseCookieParams req =
   let headers = snd <$> L.filter ((==) hCookie . fst) (requestHeaders req)
-   in join $ parseCookiesText <$> headers
+   in (parseCookiesText =<< headers)
 
 setCookieByteString :: SetCookie -> B.ByteString
 setCookieByteString setCookie =

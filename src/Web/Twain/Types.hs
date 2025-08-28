@@ -25,7 +25,7 @@ import Numeric.Natural
 -- | `ResponderM` is an Either-like monad that can "short-circuit" and return a
 -- response, or pass control to the next middleware. This provides convenient
 -- branching with do notation for redirects, error responses, etc.
-data ResponderM a
+newtype ResponderM a
   = ResponderM (Request -> IO (Either RouteAction (a, Request)))
 
 data RouteAction
@@ -88,7 +88,7 @@ instance Exception HttpError
 
 type Param = (Text, Text)
 
-data PathPattern = MatchPath (Request -> Maybe [Param])
+newtype PathPattern = MatchPath (Request -> Maybe [Param])
 
 instance IsString PathPattern where
   fromString s = MatchPath (matchPath (T.pack s))
@@ -98,10 +98,10 @@ matchPath path req =
   go (splitPath path) (pathInfo req) (Just [])
   where
     splitPath = L.filter (not . T.null) . T.split (== '/')
-    go (p : ps) (r : rs) m@(Just pms) =
-      if not (T.null p) && T.head p == ':'
-        then go ps rs (Just ((T.drop 1 p, r) : pms))
-        else if p == r then go ps rs m else Nothing
+    go (p : ps) (r : rs) m@(Just pms)
+      | not (T.null p) && T.head p == ':' = go ps rs (Just ((T.drop 1 p, r) : pms))
+      | p == r = go ps rs m
+      | otherwise = Nothing
     go [] [] pms = pms
     go _ _ _ = Nothing
 
@@ -139,13 +139,10 @@ instance ParsableParam () where
 instance (ParsableParam a) => ParsableParam [a] where parseParam = parseParamList
 
 instance ParsableParam Bool where
-  parseParam t =
-    if t' == T.toCaseFold "true"
-      then Right True
-      else
-        if t' == T.toCaseFold "false"
-          then Right False
-          else Left $ HttpError status400 "parseParam Bool: no parse"
+  parseParam t
+    | t' == T.toCaseFold "true" = Right True
+    | t' == T.toCaseFold "false" = Right False
+    | otherwise = Left $ HttpError status400 "parseParam Bool: no parse"
     where
       t' = T.toCaseFold t
 
@@ -178,13 +175,13 @@ instance ParsableParam Word64 where parseParam = readEither
 instance ParsableParam Natural where parseParam = readEither
 
 -- | Useful for creating 'ParsableParam' instances for things that already implement 'Read'.
-readEither :: Read a => Text -> Either HttpError a
+readEither :: (Read a) => Text -> Either HttpError a
 readEither t = case [x | (x, "") <- reads (T.unpack t)] of
   [x] -> Right x
   [] -> Left $ HttpError status400 "readEither: no parse"
   _ -> Left $ HttpError status400 "readEither: ambiguous parse"
 
-data HTTP2Exception = HTTP2Exception ErrorCode
+newtype HTTP2Exception = HTTP2Exception ErrorCode
   deriving (Show, Typeable)
 
 instance Exception HTTP2Exception
