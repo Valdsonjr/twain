@@ -111,7 +111,6 @@ import qualified Data.Aeson as JSON
 import Data.ByteString.Char8 as Char8
 import Data.ByteString.Lazy as BL
 import qualified Data.CaseInsensitive as CI
-import Data.Either.Combinators (rightToMaybe)
 import qualified Data.List as L
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
@@ -124,7 +123,6 @@ import Network.HTTP.Types
 import Network.Wai
 import Network.Wai.Parse hiding (Param)
 import Network.Wai.Request
-import System.Environment (lookupEnv)
 import Web.Cookie
 import Web.Twain.Internal
 import Web.Twain.Types
@@ -502,3 +500,6 @@ redirect302 url = raw status302 [(hLocation, encodeUtf8 url)] ""
 -- | Create a redirect response 303 status (See Other).
 redirect303 :: Text -> Response
 redirect303 url = raw status303 [(hLocation, encodeUtf8 url)] ""
+
+rightToMaybe :: Either e a -> Maybe a
+rightToMaybe = either (const Nothing) Just

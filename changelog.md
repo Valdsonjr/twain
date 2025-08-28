@@ -1,5 +1,11 @@
 # Change Log
 
+## 2.2.0.2 [2025-08-28]
+- Remove unneeded packages
+  - transformers: not used at all
+  - either: has a lot of dependencies for just the two used functions (mapRight and rightToMaybe)
+- Move common cabal configuration to a shared stanza
+
 ## 2.2.0.1 [2024-11-05]
 
 - Fix failing compilation: Use qualified import of Data.Text.

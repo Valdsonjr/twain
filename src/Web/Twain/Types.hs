@@ -1,13 +1,13 @@
 module Web.Twain.Types where
 
-import Control.Exception (SomeException, throwIO, try)
+import Control.Exception (throwIO, try)
 import Control.Monad (ap)
-import Control.Monad.Catch hiding (throw, try)
+import Control.Monad.Catch hiding (try)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Aeson as JSON
+import Data.Bifunctor (first, second)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
-import Data.Either.Combinators (mapRight)
 import Data.Int
 import Data.List as L
 import Data.String (IsString, fromString)
@@ -17,10 +17,10 @@ import qualified Data.Text.Lazy as TL
 import Data.Typeable (Typeable)
 import Data.Word
 import Network.HTTP.Types (Status, status400)
-import Network.Wai (Middleware, Request, Response, pathInfo)
+import Network.HTTP2.Client (ErrorCode (..))
+import Network.Wai (Request, Response, pathInfo)
 import Network.Wai.Parse (File, ParseRequestBodyOptions)
 import Numeric.Natural
-import Network.HTTP2.Client (ErrorCode(..))
 
 -- | `ResponderM` is an Either-like monad that can "short-circuit" and return a
 -- response, or pass control to the next middleware. This provides convenient
@@ -34,24 +34,24 @@ data RouteAction
 
 data ParsedRequest
   = ParsedRequest
-      { preqBody :: Maybe ParsedBody,
-        preqCookieParams :: [Param],
-        preqPathParams :: [Param],
-        preqQueryParams :: [Param]
-      }
+  { preqBody :: Maybe ParsedBody,
+    preqCookieParams :: [Param],
+    preqPathParams :: [Param],
+    preqQueryParams :: [Param]
+  }
 
 data ResponderOptions
   = ResponderOptions
-      { optsMaxBodySize :: Word64,
-        optsParseBody :: ParseRequestBodyOptions
-      }
+  { optsMaxBodySize :: Word64,
+    optsParseBody :: ParseRequestBodyOptions
+  }
 
 data ParsedBody
   = FormBody ([Param], [File BL.ByteString])
   | JSONBody JSON.Value
 
 instance Functor ResponderM where
-  fmap f (ResponderM g) = ResponderM $ \r -> mapRight (\(a, b) -> (f a, b)) `fmap` g r
+  fmap f (ResponderM g) = ResponderM $ \r -> second (first f) `fmap` g r
 
 instance Applicative ResponderM where
   pure a = ResponderM $ \r -> pure (Right (a, r))
